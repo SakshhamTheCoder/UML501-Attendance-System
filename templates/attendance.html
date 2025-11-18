@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Attendance Dashboard</h2>
+
+<h3>Current Status</h3>
+<table id="status-table" border="1" cellpadding="6" cellspacing="0">
+    <tr>
+        <th>Photo</th>
+        <th>Name</th>
+        <th>Status</th>
+    </tr>
+    {% for name, st in status.items() %}
+    <tr data-name="{{ name }}">
+        <td class="photo">{% if name in images %}<img src="data:image/jpeg;base64,{{ images[name] }}" width="60" />{%
+            else %}—{% endif %}</td>
+        <td class="name">{{ name }}</td>
+        <td class="state">{{ st }}</td>
+    </tr>
+    {% else %}
+    <tr id="status-empty">
+        <td colspan="2">No entries yet</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h3>Event Log (latest first)</h3>
+<table id="events-table" border="1" cellpadding="6" cellspacing="0">
+    <tr>
+        <th>Time</th>
+        <th>Photo</th>
+        <th>Name</th>
+        <th>Action</th>
+    </tr>
+    {% for ev in events|reverse %}
+    <tr>
+        <td class="ev-time">{{ ev.time }}</td>
+        <td class="ev-photo">{% if ev.image %}<img src="data:image/jpeg;base64,{{ ev.image }}" width="60" />{% elif
+            ev.name in images %}<img src="data:image/jpeg;base64,{{ images[ev.name] }}" width="60" />{% else %}—{% endif
+            %}</td>
+        <td class="ev-name">{{ ev.name }}</td>
+        <td class="ev-action">{{ ev.action }}</td>
+    </tr>
+    {% else %}
+    <tr id="events-empty">
+        <td colspan="3">No events yet</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<script>
+    // Connect to server-sent events to receive updates in real-time
+    const evtSource = new EventSource('/events');
+
+    function renderStatus(status, images) {
+        const table = document.getElementById('status-table');
+        // remove any rows except header
+        const rows = Array.from(table.querySelectorAll('tr')).slice(1);
+        rows.forEach(r => r.remove());
+
+        const names = Object.keys(status || {});
+        if (names.length === 0) {
+            const empty = document.createElement('tr');
+            empty.id = 'status-empty';
+            empty.innerHTML = '<td colspan="2">No entries yet</td>';
+            table.appendChild(empty);
+            return;
+        }
+
+        names.forEach(name => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-name', name);
+            const imgHtml = images && images[name] ? `<img src="data:image/jpeg;base64,${images[name]}" width="60" />` : '—';
+            tr.innerHTML = `<td class="photo">${imgHtml}</td><td class="name">${name}</td><td class="state">${status[name]}</td>`;
+            table.appendChild(tr);
+        });
+    }
+
+    function renderEvents(events, images) {
+        const table = document.getElementById('events-table');
+        const rows = Array.from(table.querySelectorAll('tr')).slice(1);
+        rows.forEach(r => r.remove());
+
+        if (!events || events.length === 0) {
+            const empty = document.createElement('tr');
+            empty.id = 'events-empty';
+            empty.innerHTML = '<td colspan="4">No events yet</td>';
+            table.appendChild(empty);
+            return;
+        }
+
+        // latest first
+        events.slice().reverse().forEach(ev => {
+            const tr = document.createElement('tr');
+            const imgHtml = ev.image ? `<img src="data:image/jpeg;base64,${ev.image}" width="60" />` : (images && images[ev.name] ? `<img src="data:image/jpeg;base64,${images[ev.name]}" width="60" />` : '—');
+            tr.innerHTML = `<td class="ev-time">${ev.time}</td><td class="ev-photo">${imgHtml}</td><td class="ev-name">${ev.name}</td><td class="ev-action">${ev.action}</td>`;
+            table.appendChild(tr);
+        });
+    }
+
+    evtSource.addEventListener('update', function (e) {
+        try {
+            const payload = JSON.parse(e.data);
+            // payload includes: events, status, images
+            renderStatus(payload.status, payload.images || {});
+            renderEvents(payload.events, payload.images || {});
+        } catch (err) {
+            console.error('Failed parsing SSE payload', err);
+        }
+    });
+
+    evtSource.onerror = function (err) {
+        console.error('EventSource failed:', err);
+    };
+</script>
+
+{% endblock %}

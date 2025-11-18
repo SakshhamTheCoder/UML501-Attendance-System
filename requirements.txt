@@ -1,0 +1,11 @@
+flask
+opencv-python
+numpy
+scikit-learn
+pandas
+joblib
+setuptools
+face_recognition
+werkzeug
+pillow
+git+https://github.com/ageitgey/face_recognition_models
