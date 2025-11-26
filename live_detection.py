@@ -1,10 +1,15 @@
+"""
+live_detection.py - real-time webcam attendance using recognition module
+"""
+
 import cv2
 import threading
-import os
 import joblib
 import base64
+import os
+
 from config import Config
-from recognition import get_encodings, predict
+from recognition import get_faces_and_embeddings_from_bgr
 from attendance import mark_seen
 from dashboard import run_dashboard
 
@@ -12,18 +17,28 @@ from dashboard import run_dashboard
 def start_dashboard():
     t = threading.Thread(target=run_dashboard, daemon=True)
     t.start()
-    print("Dashboard running @ http://127.0.0.1:5000")
 
 
-def load_model():
+def load_pipeline():
     if not os.path.exists(Config.MODEL_PATH):
-        raise FileNotFoundError(f"Model not found: {Config.MODEL_PATH}")
+        raise FileNotFoundError("model not found: " + Config.MODEL_PATH)
     return joblib.load(Config.MODEL_PATH)
+
+
+def predict_name(pipeline, embedding):
+    X = embedding.reshape(1, -1)
+    Xs = pipeline["scaler"].transform(X)
+    distances, _ = pipeline["model"].kneighbors(Xs, n_neighbors=1)
+    closest = float(distances[0][0])
+    print("Closest distance:", closest)
+    if closest > Config.DISTANCE_THRESHOLD:
+        return "Unknown", closest
+    return pipeline["model"].predict(Xs)[0], closest
 
 
 def main():
     start_dashboard()
-    pipeline = load_model()
+    pipeline = load_pipeline()
 
     cap = cv2.VideoCapture(Config.CAMERA_INDEX)
     if not cap.isOpened():
@@ -33,7 +48,7 @@ def main():
     frame_count = 0
     last_detections = []
 
-    print("Press Q to quit")
+    print("Press 'q' to quit")
 
     while True:
         ret, frame = cap.read()
@@ -43,50 +58,43 @@ def main():
         original = frame.copy()
         h, w = frame.shape[:2]
         scale = Config.FRAME_WIDTH / w if w > Config.FRAME_WIDTH else 1.0
-        frame_small = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
-        rgb_small = cv2.cvtColor(frame_small, cv2.COLOR_BGR2RGB)
+        small = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+        # small is BGR
+        faces = last_detections
 
         if frame_count % Config.PROCESS_EVERY_N == 0:
-            encs, boxes = get_encodings(rgb_small)
+            results = get_faces_and_embeddings_from_bgr(small, enforce_detection=False)
             detections = []
-
-            for enc, (top, right, bottom, left) in zip(encs, boxes):
-                name = predict(pipeline, enc)
-                t, r, b, l = (
-                    int(top / scale),
-                    int(right / scale),
-                    int(bottom / scale),
-                    int(left / scale),
-                )
-                detections.append((name, (t, r, b, l)))
+            for emb, (top, right, bottom, left) in results:
+                name, dist = predict_name(pipeline, emb)
+                # rescale coords
+                t = int(top / scale)
+                r = int(right / scale)
+                b = int(bottom / scale)
+                l = int(left / scale)
+                detections.append((name, (t, r, b, l), dist))
 
                 if name != "Unknown":
-                    # crop face from the original (BGR) frame and encode to JPEG base64
-                    try:
-                        face_bgr = original[t:b, l:r]
-                        # ensure non-empty
-                        if face_bgr.size != 0:
-                            _, buf = cv2.imencode(".jpg", face_bgr)
-                            img_b64 = base64.b64encode(buf.tobytes()).decode("ascii")
-                        else:
-                            img_b64 = None
-                    except Exception:
-                        img_b64 = None
+                    crop = original[t:b, l:r]
+                    if crop.size > 0:
+                        _, buf = cv2.imencode(".jpg", crop)
+                        img_b64 = base64.b64encode(buf.tobytes()).decode("ascii")
+                        mark_seen(name, image_b64=img_b64)
 
-                    mark_seen(name, image_b64=img_b64)
+            last_detections = detections
 
-            last_detections = detections.copy()
-        else:
-            detections = last_detections
-
-        for name, (t, r, b, l) in detections:
+        # draw boxes
+        for det in last_detections:
+            name, (t, r, b, l), dist = det
             color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
             cv2.rectangle(original, (l, t), (r, b), color, 2)
+            label = f"{name} ({dist:.2f})" if name != "Unknown" else "Unknown"
             cv2.putText(
-                original, name, (l, t - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2
+                original, label, (l, t - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2
             )
-        cv2.namedWindow("Face Attendance", cv2.WINDOW_NORMAL)
+
         cv2.imshow("Face Attendance", original)
+
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 

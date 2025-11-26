@@ -1,13 +1,18 @@
 class Config:
+    # CAMERA CONFIG
     CAMERA_INDEX = 0
-    MODEL_PATH = "model.pkl"
-    FACE_DETECT_MODEL = "hog"  # "hog" (fast) or "cnn" (accurate, GPU only)
     FRAME_WIDTH = 640
-    PROCESS_EVERY_N = 3
+    PROCESS_EVERY_N = 3  # Run detection every N frames
 
-    # DISTANCE_THRESHOLD = 9.642  # Distance required to accept identity
-    DISTANCE_THRESHOLD = 15.421
-    ENCODING_NORMALIZE = True  # L2 normalize encodings for stability
+    # MODEL CONFIG
+    MODEL_PATH = "model.pkl"
+    DETECTOR_BACKEND = "retinaface"  # deepface detector
+    EMBEDDING_MODEL = "ArcFace"  # deepface embedding model
 
-    SSE_UPDATE_INTERVAL = 1  # dashboard update frequency
-    DEBOUNCE_SECONDS = 3  # seconds to debounce IN/OUT toggles
+    # CLASSIFIER CONFIG
+    DISTANCE_THRESHOLD = 25.16  # tuned threshold
+    ENCODING_NORMALIZE = False  # not needed for DeepFace embeddings
+
+    # DASHBOARD CONFIG
+    SSE_UPDATE_INTERVAL = 1
+    DEBOUNCE_SECONDS = 3
