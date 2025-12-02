@@ -26,6 +26,15 @@ from sklearn.metrics import (
 from config import Config
 from recognition import get_faces_and_embeddings_from_bgr
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # suppress TensorFlow C++ warnings
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"  # prevents CPU tensor warnings
+os.environ["DEEPFACE_SUPPRESS_OUTPUT"] = "true"  # hides DeepFace logs
+
+import warnings
+
+warnings.filterwarnings("ignore")  # hide all python warnings
+
+
 IMAGES_FOLDER = "dataset/Images/"
 FACES_FOLDER = "dataset/Faces/"
 os.makedirs(FACES_FOLDER, exist_ok=True)
@@ -99,7 +108,7 @@ def build_embeddings():
 
 
 def main():
-    print("Cropping faces (optional)...")
+    print("Cropping faces...")
     crop_and_save_all()
 
     print("Building embeddings...")
