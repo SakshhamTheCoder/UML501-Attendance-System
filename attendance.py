@@ -1,3 +1,8 @@
+"""
+attendance.py
+- Manages attendance status and events
+"""
+
 from datetime import datetime, timedelta
 from threading import Lock
 from config import Config

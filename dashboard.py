@@ -1,3 +1,8 @@
+"""
+dashboard.py
+- Provides a web dashboard to monitor attendance events and status
+"""
+
 from flask import Flask, render_template, Response, stream_with_context
 import time
 import json

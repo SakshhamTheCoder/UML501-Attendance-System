@@ -5,7 +5,6 @@ scikit-learn
 pandas
 joblib
 setuptools
-face_recognition
+deepface
 werkzeug
 pillow
-git+https://github.com/ageitgey/face_recognition_models
